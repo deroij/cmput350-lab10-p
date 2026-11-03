@@ -2,6 +2,7 @@
 
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp>
+#include <chrono>
 
 int main() {
     // OpenGL settings we request for:
@@ -33,8 +34,13 @@ int main() {
     fullscreenTriangle[2].texCoords = {0, 2};
     // load vertex and fragment shaders:
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
+
     // TODO: eventually add another Shader here which uses the blur fragment shader,
     // also create a sf::RenderTexture...
+    sf::Shader blurShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"blur.frag"});
+    sf::RenderTexture preBlurRenderTexture(sf::Vector2u{1280, 720});
+
+    auto start = std::chrono::steady_clock::now();
     while (window.isOpen()) {
         while (auto e = window.pollEvent()) {
             if (e->is<sf::Event::Closed>()) {
@@ -43,8 +49,25 @@ int main() {
         }
         // TODO: set shader uniforms and eventually draw into
         // a RenderTexture first before postprocessing into the window target.
+        sf::Vector2u size = window.getSize();
+        shader.setUniform("resolution", sf::Glsl::Vec2(static_cast<float>(size.x), static_cast<float>(size.y)));
+
+        sf::Vector2i mouse = sf::Mouse::getPosition(window);
+        shader.setUniform("mousePos", sf::Glsl::Vec2(static_cast<float>(mouse.x), static_cast<float>(size.y - mouse.y)));
+
+        shader.setUniform("time", std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count());
+
+        preBlurRenderTexture.clear(sf::Color::Black);
+        preBlurRenderTexture.draw(fullscreenTriangle, &shader);
+        preBlurRenderTexture.display();
+
+
+        blurShader.setUniform("resolution", sf::Glsl::Vec2(static_cast<float>(size.x), static_cast<float>(size.y)));
+
+        blurShader.setUniform("sourceTexture", preBlurRenderTexture.getTexture());            
+
         window.clear(sf::Color::Black);
-        window.draw(fullscreenTriangle, &shader);
+        window.draw(fullscreenTriangle, &blurShader);
         window.display();
     }
     return 0;
